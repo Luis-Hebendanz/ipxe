@@ -1,4 +1,5 @@
 .toolcheck
+../.vscode
 .echocheck
 TAGS*
 bin*
