@@ -1,4 +1,5 @@
 .envrc
+.cache
 .direnv
 .history
 .__pycache__

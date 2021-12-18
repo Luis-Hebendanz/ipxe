@@ -4,7 +4,7 @@
 #
 
 CLEANUP		:=
-CFLAGS		:=
+CFLAGS		:= -Wno-deprecated-declarations
 ASFLAGS		:=
 LDFLAGS		:=
 HOST_CFLAGS	:=

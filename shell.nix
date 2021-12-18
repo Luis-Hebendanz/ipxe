@@ -1,8 +1,15 @@
   { pkgs ? import <nixpkgs> {}, luis }:
   pkgs.mkShell {
     buildInputs = with pkgs; [
+      llvmPackages_latest.libclang
+      perl
+      cdrkit
+      xz
+      openssl
+      gnu-efi
+      mtools
       python3
-      (with python38Packages; [
+      (with python39Packages; [
         autopep8
         pylint
         pip
@@ -10,6 +17,7 @@
       ])
 
     ];
+    NIX_CFLAGS_COMPILE = "-Wno-error";
     shellHook = ''
     export HISTFILE=$PWD/.history
     # To be able to execute precompiled dynamic binaries
