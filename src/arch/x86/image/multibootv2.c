@@ -77,6 +77,7 @@ struct multiboot_header_info {
 	size_t offset;
 };
 
+
 #define BOOT_INFO_BUFFER_SIZE 0x1000
 /** Multiboot tags buffer **/
 static uint8_t __bss16_array(mbinfo, [BOOT_INFO_BUFFER_SIZE]);
@@ -108,22 +109,22 @@ static uint32_t pad8(uint32_t value){
 static int add_tag_entry(uint8_t **curr_tag_local_ptr, uint32_t new_tag_size,
 						 uint32_t tag_type) {
 
-	// The first two bytes of the boot info struct aren't a tag and contain size
-	// information
+	/** The first two bytes of the boot info struct aren't a tag and contain size
+	* information */
 	struct multiboot_bootinfo_start *start_tag = (void *)&mbinfo;
 	uint32 i = 0;
 
-	// First time add 8 bytes to total_size and index to jump over
-	// multiboot_start_tag with padding
+	/** First time add 8 bytes to total_size and index to jump over
+	* multiboot_start_tag with padding */
 	if (start_tag->total_size == 0) {
 		start_tag->total_size = 8;
 		i = 8;
 	}
 
-	// Tags have to be 8 bytes aligned so we pad the tag size
+	/** Tags have to be 8 bytes aligned so we pad the tag size */
 	uint32_t padded_tag_size = pad8(new_tag_size);
 
-	// Check that adding a new tag doesn't exceed the boot info buffer
+	/** Check that adding a new tag doesn't exceed the boot info buffer */
 	if (padded_tag_size + start_tag->total_size > BOOT_INFO_BUFFER_SIZE) {
 		DBG("Padded tag size %d would exceed boot info buffer\n",
 			padded_tag_size);
@@ -132,8 +133,8 @@ static int add_tag_entry(uint8_t **curr_tag_local_ptr, uint32_t new_tag_size,
 
 	uint8_t *curr_data_ptr = *curr_tag_local_ptr;
 
-	// Lineary search over the tags to find the end of the list marked by a tag
-	// type of 0
+	/** Lineary search over the tags to find the end of the list marked by a tag
+	* type of 0 */
 	while (i < BOOT_INFO_BUFFER_SIZE) {
 
 		struct multiboot_bootinfo_header *tag = (void *)&curr_data_ptr[i];
@@ -202,7 +203,6 @@ static int multiboot_append_data(uint8_t *tag_ptr, uint32_t offset, void *data,
 	struct multiboot_bootinfo_start *start_tag = (void *)&mbinfo;
 	size_t total_padded_len = pad8(data_len + tag->size);
 	size_t data_len_padded = total_padded_len - tag->size;
-	printf("total_padded_len: %d\n", total_padded_len);
 
 	// Check that appending a string doesn't exceed buffer
 	if (total_padded_len + start_tag->total_size > BOOT_INFO_BUFFER_SIZE) {
@@ -214,8 +214,6 @@ static int multiboot_append_data(uint8_t *tag_ptr, uint32_t offset, void *data,
 	start_tag->total_size += data_len_padded;
 	tag->size = total_padded_len;
 
-	printf("tag->type: %d tag->size: %d\n", tag->type, tag->size);
-	printf("Total size: %d\n", start_tag->total_size);
 	memcpy((char *)tag_ptr + offset, data, data_len);
 
 	return 0;
