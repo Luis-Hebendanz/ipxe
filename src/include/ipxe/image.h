@@ -129,9 +129,10 @@ struct image_type {
  * Multiboot images are also valid executables in another format
  * (e.g. ELF), so we must perform the multiboot probe first.
  */
-#define PROBE_MULTIBOOTV2	01
+#define PROBE_MULTIBOOTV2 01
 
-#define PROBE_MULTIBOOTV1	02
+/** Multiboot version 1 */
+#define PROBE_MULTIBOOT	02
 
 
 /**

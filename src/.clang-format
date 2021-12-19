@@ -1,3 +1,6 @@
 IndentWidth:     4
 TabWidth:        4
 UseTab:          true
+BasedOnStyle:    "LLVM"
+SpacesInConditionalStatement: true
+SpacesInParentheses: true

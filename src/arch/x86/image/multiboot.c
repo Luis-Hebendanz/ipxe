@@ -485,8 +485,8 @@ static int multiboot_probe ( struct image *image ) {
 }
 
 /** Multiboot image type */
-struct image_type multiboot_image_type __image_type ( PROBE_MULTIBOOTV1 ) = {
-	.name = "Multibootv1",
+struct image_type multiboot_image_type __image_type ( PROBE_MULTIBOOT ) = {
+	.name = "Multiboot",
 	.probe = multiboot_probe,
 	.exec = multiboot_exec,
 };
