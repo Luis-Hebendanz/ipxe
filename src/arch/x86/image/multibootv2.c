@@ -353,6 +353,10 @@ static int multiboot_add_modules(struct image *image, physaddr_t start,
 	/* Add each image as a multiboot module */
 	for_each_image(module_image) {
 
+		/* Do not include kernel image itself as a module */
+		if (module_image == image)
+			continue;
+
 		if ((rc = add_tag_entry(tag_ptr, sizeof(struct multiboot_module_tag),
 								MULTIBOOT_TAG_TYPE_MODULE))) {
 			DBGC(image,
@@ -361,10 +365,6 @@ static int multiboot_add_modules(struct image *image, physaddr_t start,
 
 			return rc;
 		}
-
-		/* Do not include kernel image itself as a module */
-		if (module_image == image)
-			continue;
 
 		/* Page-align the module */
 		start = ((start + 0xfff) & ~0xfff);
@@ -393,7 +393,7 @@ static int multiboot_add_modules(struct image *image, physaddr_t start,
 				  sizeof(struct multiboot_module_tag))))) {
 			return rc;
 		}
-		DBGC(image, "MULTIBOOT2 %p module %s is [%x,%x)\n", image,
+		DBGC( image, "MULTIBOOT2 %p module %s is [%x,%x)\n", image,
 			 module_image->name, new_tag->mod_start, new_tag->mod_end);
 		start += module_image->len;
 	}
@@ -663,7 +663,7 @@ static int multiboot_exec(struct image *image) {
 		memset(bootloader_name, 0, sizeof(bootloader_name));
 		int len = snprintf(bootloader_name, sizeof(bootloader_name) - 1,
 						   "iPXE %s", product_version);
-		len++; // Make sure string is zero terminated
+		len++; // Make sure string is NULL terminated
 
 		if (((rc = multiboot_append_data(
 				  tag_ptr, sizeof(struct multiboot_bootloader_name_tag),
