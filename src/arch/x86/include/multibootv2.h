@@ -109,7 +109,6 @@ struct multiboot_module_tag {
 	struct multiboot_bootinfo_header header;
 	uint32_t mod_start;
 	uint32_t mod_end;
-	uint32_t string_ptr;
 } __attribute__((packed, may_alias));
 
 struct multiboot_memory_info_tag {
@@ -120,12 +119,10 @@ struct multiboot_memory_info_tag {
 
 struct multiboot_cmd_line_tag {
 	struct multiboot_bootinfo_header header;
-	uint32_t cmdline_ptr;
 } __attribute__((packed, may_alias));
 
 struct multiboot_bootloader_name_tag {
 	struct multiboot_bootinfo_header header;
-	uint32_t name_ptr;
 } __attribute__((packed, may_alias));
 
 struct multiboot_memory_map_tag {

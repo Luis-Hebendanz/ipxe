@@ -24,6 +24,7 @@
 #include "bits/stdint.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 FILE_LICENCE(GPL2_OR_LATER_OR_UBDL);
 
 /**
@@ -51,28 +52,6 @@ FILE_LICENCE(GPL2_OR_LATER_OR_UBDL);
 FEATURE(FEATURE_IMAGE, "MBOOT2", DHCP_EB_FEATURE_MULTIBOOT, 1);
 
 /**
- * Maximum number of modules we will allow for
- *
- * If this has bitten you: sorry.  I did have a perfect scheme with a
- * dynamically allocated list of modules on the protected-mode stack,
- * but it was incompatible with some broken OSes that can only access
- * low memory at boot time (even though we kindly set up 4GB flat
- * physical addressing as per the multiboot specification.
- *
- */
-#define MAX_MODULES 8
-
-/**
- * Maximum combined length of command lines
- *
- * Again; sorry.  Some broken OSes zero out any non-base memory that
- * isn't part of the loaded module set, so we can't just use
- * virt_to_phys(cmdline) to point to the command lines, even though
- * this would comply with the Multiboot spec.
- */
-#define MB_MAX_CMDLINE 512
-
-/**
  * Maximum number of header tags
  *
  * To prevent a deadlock we look for at max n header tags before aborting
@@ -98,30 +77,33 @@ struct multiboot_header_info {
 	size_t offset;
 };
 
-#define BOOT_INFO_BUFFER_SIZE 500
+#define BOOT_INFO_BUFFER_SIZE 0x1000
 /** Multiboot tags buffer **/
 static uint8_t __bss16_array(mbinfo, [BOOT_INFO_BUFFER_SIZE]);
 #define mbinfo __use_data16(mbinfo)
 
-/** Multiboot module command lines */
-static char __bss16_array(mb_cmdlines, [MB_MAX_CMDLINE]);
-#define mb_cmdlines __use_data16(mb_cmdlines)
+static uint32_t pad_toX(uint32_t value, uint32_t alignment) {
 
-/** Offset within module command lines */
-static unsigned int mb_cmdline_offset;
+	uint32_t mod = value % alignment;
+	if (mod == 0){
+		return value;
+	}
 
-/** The multiboot bootloader name */
-static char __bss16_array(mb_bootloader_name, [32]);
-#define mb_bootloader_name __use_data16(mb_bootloader_name)
+	return value + (alignment - mod);
+}
+
+static uint32_t pad8(uint32_t value){
+	return pad_toX(value, 8);
+}
 
 /**
- * Finds end of tag list and returns a pointer to it
+ * Find end of mbinfo list and creates a new tag
  *
- * @v image				Multiboot file
- * @ret mmbinfo			Pointer to mbinfo buffer from which to start
- * searching
- * @ret new_tag_size	Tag size in bytes to be added
- * @ret rc				Return status code
+ * @v curr_tag_local_ptr	Pointer Pointer pointing to a valid tag header in
+ * mbinfo list
+ * @v new_tag_size			Size of tag to be created
+ * @v tag_type				Tag type to be set in header
+ * @ret rc					Return status code
  */
 static int add_tag_entry(uint8_t **curr_tag_local_ptr, uint32_t new_tag_size,
 						 uint32_t tag_type) {
@@ -139,7 +121,7 @@ static int add_tag_entry(uint8_t **curr_tag_local_ptr, uint32_t new_tag_size,
 	}
 
 	// Tags have to be 8 bytes aligned so we pad the tag size
-	uint32_t padded_tag_size = new_tag_size + (new_tag_size % 8);
+	uint32_t padded_tag_size = pad8(new_tag_size);
 
 	// Check that adding a new tag doesn't exceed the boot info buffer
 	if (padded_tag_size + start_tag->total_size > BOOT_INFO_BUFFER_SIZE) {
@@ -158,7 +140,7 @@ static int add_tag_entry(uint8_t **curr_tag_local_ptr, uint32_t new_tag_size,
 
 		// Make sure that tag is 8 bytes aligned
 		if ((uint32_t)tag % 8 != 0) {
-			DBG("curr tag is not 8 bytes aligned %x\n", (uint32_t)tag);
+			DBG("Index tag %d is not 8 bytes aligned 0x%lx\n", i, virt_to_phys(tag));
 			return -EINVAL;
 		}
 
@@ -205,6 +187,41 @@ static int add_tag_entry(uint8_t **curr_tag_local_ptr, uint32_t new_tag_size,
 }
 
 /**
+ * Append string to multiboot tag. Only use on last element in boot info list
+ *
+ * @v tag_ptr	Pointer to last element in boot info list
+ * @v offset	Offset where to append string to
+ * @v data		Data to be appended to tag
+ * @v data_len  Length of data
+ * @ret rc		Return status code
+ */
+static int multiboot_append_data(uint8_t *tag_ptr, uint32_t offset, void *data,
+								 size_t data_len) {
+
+	struct multiboot_bootinfo_header *tag = (void *)tag_ptr;
+	struct multiboot_bootinfo_start *start_tag = (void *)&mbinfo;
+	size_t total_padded_len = pad8(data_len + tag->size);
+	size_t data_len_padded = total_padded_len - tag->size;
+	printf("total_padded_len: %d\n", total_padded_len);
+
+	// Check that appending a string doesn't exceed buffer
+	if (total_padded_len + start_tag->total_size > BOOT_INFO_BUFFER_SIZE) {
+		DBG("Appending data  with len %u would exceed boot info buffer\n",
+			data_len);
+		return -ENOBUFS;
+	}
+
+	start_tag->total_size += data_len_padded;
+	tag->size = total_padded_len;
+
+	printf("tag->type: %d tag->size: %d\n", tag->type, tag->size);
+	printf("Total size: %d\n", start_tag->total_size);
+	memcpy((char *)tag_ptr + offset, data, data_len);
+
+	return 0;
+}
+
+/**
  * Build multiboot memory map
  *
  * @v image		Multiboot image
@@ -231,8 +248,7 @@ static int multiboot_build_memmap(struct image *image, uint8_t **tag_ptr) {
 	struct multiboot_memory_info_tag *mem_info_tag = (void *)*tag_ptr;
 
 	// Padd mmap entry size
-	uint32_t entry_size_padded = sizeof(struct multiboot_memory_map_entry);
-	entry_size_padded += entry_size_padded % 8;
+	uint32_t entry_size_padded = pad8(sizeof(struct multiboot_memory_map_entry));
 
 	// Calculate total mmap tag size with all entries
 	uint32_t mem_tag_size = sizeof(struct multiboot_memory_map_tag) +
@@ -270,8 +286,9 @@ static int multiboot_build_memmap(struct image *image, uint8_t **tag_ptr) {
 		new_tag->type = MBMEM_RAM;
 
 		DBGC(image,
-			 "MULTIBOOT2 %d: base addr: 0x%llx length: 0x%llx mem_location: 0x%lx\n", i,
-			 new_tag->base_addr, new_tag->length, virt_to_phys(new_tag));
+			 "MULTIBOOT2 %d: base addr: 0x%llx length: 0x%llx mem_location: "
+			 "0x%lx\n",
+			 i, new_tag->base_addr, new_tag->length, virt_to_phys(new_tag));
 
 		// Update struct multiboot_memory_info_tag
 		if (memmap.regions[i].start == 0)
@@ -288,45 +305,48 @@ static int multiboot_build_memmap(struct image *image, uint8_t **tag_ptr) {
  * Add command line in base memory
  *
  * @v image		Image
- * @ret physaddr	Physical address of command line
+ * @v tag_ptr   Pointer to a tag header
+ * @v offset	Offset from tag_ptr to copy string to
+ * @ret rc		Return status code
  */
-static physaddr_t multiboot_add_cmdline(struct image *image) {
-	char *mb_cmdline = (mb_cmdlines + mb_cmdline_offset);
-	size_t remaining = (sizeof(mb_cmdlines) - mb_cmdline_offset);
-	char *buf = mb_cmdline;
+static int multiboot_add_cmdline(struct image *image, void *tag_ptr,
+								 uint32_t offset) {
+
+	char buf[512];
+	memset(buf, 0, sizeof(buf));
 	size_t len;
+	size_t remaining = sizeof(buf);
+	int rc;
 
 	/* Copy image URI to base memory buffer as start of command line */
-	len = (format_uri(image->uri, buf, remaining) + 1 /* NUL */);
-	if (len > remaining)
-		len = remaining;
-	mb_cmdline_offset += len;
-	buf += len;
+	len = (format_uri(image->uri, buf, sizeof(buf) - 1) + 1 /* NUL */);
 	remaining -= len;
 
 	/* Copy command line to base memory buffer, if present */
 	if (image->cmdline) {
-		mb_cmdline_offset--; /* Strip NUL */
-		buf--;
-		remaining++;
-		len = (snprintf(buf, remaining, " %s", image->cmdline) + 1 /* NUL */);
-		if (len > remaining)
-			len = remaining;
-		mb_cmdline_offset += len;
+		len--; // Overwrite NULL
+		remaining++; // Overwrite NULL
+		len += (snprintf(buf + len, remaining, " %s", image->cmdline) +
+				1 /* NUL */);
 	}
 
-	return virt_to_phys(mb_cmdline);
+	if (((rc = multiboot_append_data(tag_ptr, offset, buf, len)))) {
+		DBGC(image, "MULTIBOOTV2 failed to append string\n");
+		return rc;
+	}
+
+	return 0;
 }
 
-// /**
-//  * Add multiboot modules
-//  *
-//  * @v image		Multiboot image
-//  * @v start		Start address for modules
-//  * @v mbinfo		Pointer to mbinfo buffer from which to start
-//  * searching
-//  * @ret rc		Return status code
-//  */
+/**
+ * Add multiboot modules
+ *
+ * @v image		Multiboot image
+ * @v start		Start address for modules
+ * @v mbinfo		Pointer to mbinfo buffer from which to start
+ * searching
+ * @ret rc		Return status code
+ */
 static int multiboot_add_modules(struct image *image, physaddr_t start,
 								 uint8_t **tag_ptr) {
 	struct image *module_image;
@@ -370,7 +390,11 @@ static int multiboot_add_modules(struct image *image, physaddr_t start,
 
 		new_tag->mod_start = start;
 		new_tag->mod_end = (start + module_image->len);
-		new_tag->string_ptr = multiboot_add_cmdline(module_image);
+		if (((rc = multiboot_add_cmdline(
+				  module_image, new_tag,
+				  sizeof(struct multiboot_module_tag))))) {
+			return rc;
+		}
 		DBGC(image, "MULTIBOOT2 %p module %s is [%x,%x)\n", image,
 			 module_image->name, new_tag->mod_start, new_tag->mod_end);
 		start += module_image->len;
@@ -609,7 +633,6 @@ static int multiboot_exec(struct image *image) {
 	memset(&mbinfo, 0, sizeof(mbinfo));
 
 	// Add command line tag to boot info structure
-	mb_cmdline_offset = 0;
 	uint8_t *tag_ptr = &mbinfo[0];
 
 	if (((rc = add_tag_entry(&tag_ptr, sizeof(struct multiboot_cmd_line_tag),
@@ -620,7 +643,10 @@ static int multiboot_exec(struct image *image) {
 	}
 	{
 		struct multiboot_cmd_line_tag *new_tag = (void *)tag_ptr;
-		new_tag->cmdline_ptr = multiboot_add_cmdline(image);
+		if (((rc = multiboot_add_cmdline(
+				  image, new_tag, sizeof(struct multiboot_cmd_line_tag))))) {
+			return rc;
+		}
 	}
 
 	// Add boot loader name tag
@@ -635,12 +661,17 @@ static int multiboot_exec(struct image *image) {
 		return rc;
 	}
 	{
-		struct multiboot_bootloader_name_tag *new_tag = (void *)tag_ptr;
+		char bootloader_name[32];
+		memset(bootloader_name, 0, sizeof(bootloader_name));
+		int len = snprintf(bootloader_name, sizeof(bootloader_name) - 1,
+						   "iPXE %s", product_version);
+		len++; // Make sure string is zero terminated
 
-		snprintf(mb_bootloader_name, sizeof(mb_bootloader_name), "iPXE %s",
-				 product_version);
-
-		new_tag->name_ptr = virt_to_phys(mb_bootloader_name);
+		if (((rc = multiboot_append_data(
+				  tag_ptr, sizeof(struct multiboot_bootloader_name_tag),
+				  bootloader_name, len)))) {
+			return rc;
+		}
 	}
 
 	if ((rc = multiboot_add_modules(image, max, &tag_ptr)))

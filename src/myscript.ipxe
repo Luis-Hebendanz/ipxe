@@ -2,6 +2,6 @@
 
 echo =======HELLO WORLD======
 dhcp
-set filename http://192.168.178.66:80/_/file?name=kernel&type=kernel&arch=0&mac=52%3A54%3A00%3A12%3A34%3A56
-autoboot 
+imgfetch --name kernel http://192.168.178.66:80/_/file?name=kernel&type=kernel&arch=0&mac=52%3A54%3A00%3A12%3A34%3A56 helloimageargs
+boot kernel
 shell
