@@ -31,7 +31,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ perl cdrkit xz openssl gnu-efi mtools ] ++ lib.optional stdenv.hostPlatform.isx86 syslinux;
 
-  src = ./;
+  src = ./.;
 
   # not possible due to assembler code
   hardeningDisable = [ "pic" "stackprotector" ];

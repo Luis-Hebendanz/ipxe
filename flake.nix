@@ -11,8 +11,40 @@
         pkgs = import nixpkgs { inherit system; };
       in
       rec {
-          packages.default = pkgs.callPackage ./ipxe.nix {};
+        packages.default = pkgs.callPackage ./ipxe.nix { };
 
-          defaultPackage = packages.default;
+        defaultPackage = packages.default;
+
+        devShell = with pkgs; mkShell {
+          buildInputs = with pkgs; [
+            llvmPackages_latest.libclang
+            perl
+            cdrkit
+            xz
+            openssl
+            gnu-efi
+            mtools
+            python3
+            (with python39Packages; [
+              autopep8
+              pylint
+              pip
+              ipython
+            ])
+
+          ];
+          NIX_CFLAGS_COMPILE = "-Wno-error";
+
+          # Dynamic libraries your precompiled executable needs
+          # Find more with ldd <executable>
+          NIX_LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (with pkgs; [
+            stdenv.cc.cc
+            glib
+            zlib
+            gtk3
+            dbus
+            fontconfig
+          ]);
+        };
       });
 }

@@ -3,3 +3,5 @@
 .direnv
 .history
 .__pycache__
+result
+commit.sh
