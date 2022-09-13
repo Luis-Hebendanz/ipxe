@@ -11,5 +11,3 @@ jobs:
       - uses: cachix/install-nix-action@v15
       - name: Building package
         run: nix build
-      - name: Building legacy package
-        run: nix-build . -A defaultPackage.x86_64-linux
