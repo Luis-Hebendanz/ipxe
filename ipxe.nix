@@ -3,11 +3,15 @@
 , syslinux ? null
 , embedScript ? null
 , additionalTargets ? {}
-, additionalOptions ? [ "bin/undionly.kpxe" "bin/ipxe.dsk" "bin/ipxe.iso" ]
+, additionalOptions ? [ ]
 }:
 
 let
-  targets = additionalTargets;
+  targets = additionalTargets // lib.optionalAttrs stdenv.hostPlatform.isx86 {
+    "bin/ipxe.dsk" = null;
+    "bin/ipxe.iso" = null;
+    "bin/undionly.kpxe" = null;
+  };
 in
 
 stdenv.mkDerivation rec {
