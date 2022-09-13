@@ -67,6 +67,7 @@ stdenv.mkDerivation rec {
     substituteInPlace src/Makefile.housekeeping --replace '/bin/echo' echo
   '' + lib.optionalString stdenv.hostPlatform.isx86 ''
     substituteInPlace src/util/genfsimg --replace /usr/lib/syslinux ${syslinux}/share/syslinux
+    . ${./deterministic-git}
   '' + ''
     runHook postConfigure
   '';
