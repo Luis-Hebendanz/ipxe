@@ -5,9 +5,9 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: nixos/nix
     steps:
       - uses: actions/checkout@v2
-      - uses: cachix/install-nix-action@v12
+      - uses: cachix/install-nix-action@v15
       - name: Building package
-        run: nix-build . -A defaultPackage.x86_64-linux
+        run: nix build 
