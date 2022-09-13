@@ -1,7 +1,7 @@
 #!ipxe
 
-echo =======HELLO WORLD======
+echo =======WELCOME TO _MY_ WORLD======
 dhcp
-imgfetch --name kernel http://192.168.178.66:80/_/file?name=kernel&type=kernel&arch=0&mac=52%3A54%3A00%3A12%3A34%3A56 helloimageargs
+imgfetch --name kernel http://qubasa.r:1234/isofiles/boot/kernel.elf
 boot kernel
 shell

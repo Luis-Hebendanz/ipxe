@@ -1,26 +1,18 @@
-    {
-        description = "my project description";
-        nixConfig.bash-prompt = "\[nix-develop\]$ ";
-        inputs.flake-utils.url = "github:numtide/flake-utils";
-        # My fork of nixpkgs with custom packages
-        inputs.luispkgs.url = "github:Luis-Hebendanz/nixpkgs/luispkgs";
+{
+  description = "A very basic flake";
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
 
-        outputs = { self, nixpkgs, flake-utils, luispkgs }:
-        flake-utils.lib.eachDefaultSystem
-        (system:
-        let 
-            pkgs = import nixpkgs {
-		          inherit system;
-		          config = { allowUnfree = true; };
-	          };
+  outputs = { self, nixpkgs, flake-utils }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = import nixpkgs { inherit system; };
+      in
+      rec {
+          packages.default = pkgs.callPackage ./ipxe.nix {};
 
-            luis = import luispkgs {
-		          inherit system;
-		          config = { allowUnfree = true; };
-	          };
-        in
-            {
-                devShell = import ./shell.nix { inherit pkgs; inherit luis; };
-            }
-        );
-    }
+          defaultPackage = packages.default;
+      });
+}
